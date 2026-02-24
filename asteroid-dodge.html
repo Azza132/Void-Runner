@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOID RUNNER</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cyan: #00ffe7;
+    --pink: #ff2d78;
+    --yellow: #ffe600;
+    --bg: #060810;
+    --panel: rgba(0,255,231,0.05);
+    --glow-cyan: 0 0 10px #00ffe7, 0 0 30px rgba(0,255,231,0.4);
+    --glow-pink: 0 0 10px #ff2d78, 0 0 30px rgba(255,45,120,0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--cyan);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: none;
+  }
+
+  /* CRT scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* Screen flicker */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0,255,231,0.015);
+    pointer-events: none;
+    z-index: 99;
+    animation: flicker 8s infinite;
+  }
+
+  @keyframes flicker {
+    0%,95%,100% { opacity: 1; }
+    96% { opacity: 0.7; }
+    97% { opacity: 1; }
+    98% { opacity: 0.85; }
+  }
+
+  .wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    width: 600px;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(0,255,231,0.2);
+    margin-bottom: 4px;
+  }
+
+  h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 1.6rem;
+    color: var(--cyan);
+    text-shadow: var(--glow-cyan);
+    letter-spacing: 0.15em;
+  }
+
+  .score-board {
+    display: flex;
+    gap: 1.5rem;
+  }
+
+  .score-item {
+    text-align: right;
+  }
+
+  .score-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.2em;
+    opacity: 0.5;
+    display: block;
+    text-transform: uppercase;
+  }
+
+  .score-val {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--yellow);
+    text-shadow: 0 0 10px rgba(255,230,0,0.6);
+  }
+
+  /* Game canvas */
+  #gameCanvas {
+    display: block;
+    border: 1px solid rgba(0,255,231,0.25);
+    box-shadow: 0 0 30px rgba(0,255,231,0.1), inset 0 0 60px rgba(0,0,0,0.5);
+    image-rendering: pixelated;
+  }
+
+  /* HUD bar */
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 600px;
+    padding: 0.4rem 0;
+    border-top: 1px solid rgba(0,255,231,0.2);
+    margin-top: 4px;
+  }
+
+  .lives {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .life-icon {
+    width: 14px; height: 14px;
+    display: inline-block;
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    background: var(--cyan);
+    box-shadow: var(--glow-cyan);
+    transition: all 0.2s;
+  }
+
+  .life-icon.lost {
+    background: transparent;
+    border: 1px solid rgba(0,255,231,0.2);
+    box-shadow: none;
+  }
+
+  .level-display {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    color: var(--pink);
+    text-shadow: var(--glow-pink);
+  }
+
+  .hint-text {
+    font-size: 0.6rem;
+    opacity: 0.35;
+    letter-spacing: 0.1em;
+  }
+
+  /* Overlays */
+  .overlay {
+    position: absolute;
+    inset: 37px 0 33px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(6,8,16,0.88);
+    z-index: 10;
+    gap: 1rem;
+  }
+
+  .overlay h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900;
+    font-size: 2.5rem;
+    letter-spacing: 0.2em;
+  }
+
+  .overlay h2.start-title { color: var(--cyan); text-shadow: var(--glow-cyan); }
+  .overlay h2.over-title  { color: var(--pink); text-shadow: var(--glow-pink); animation: pulse-over 1s ease-in-out infinite alternate; }
+
+  @keyframes pulse-over {
+    from { text-shadow: 0 0 10px #ff2d78, 0 0 30px rgba(255,45,120,0.4); }
+    to   { text-shadow: 0 0 20px #ff2d78, 0 0 60px rgba(255,45,120,0.8); }
+  }
+
+  .overlay p {
+    font-size: 0.85rem;
+    opacity: 0.6;
+    letter-spacing: 0.1em;
+  }
+
+  .overlay .final-score {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.4rem;
+    color: var(--yellow);
+    text-shadow: 0 0 20px rgba(255,230,0,0.7);
+  }
+
+  .play-btn {
+    margin-top: 0.5rem;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--bg);
+    background: var(--cyan);
+    border: none;
+    padding: 0.8rem 2.5rem;
+    cursor: pointer;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+    text-shadow: none;
+    transition: all 0.15s;
+    box-shadow: 0 0 20px rgba(0,255,231,0.5);
+  }
+
+  .play-btn:hover {
+    background: var(--yellow);
+    box-shadow: 0 0 30px rgba(255,230,0,0.7);
+    transform: scale(1.04);
+  }
+
+  .start-instructions {
+    display: flex;
+    gap: 2rem;
+    margin-top: 0.5rem;
+  }
+
+  .instr-item {
+    text-align: center;
+    font-size: 0.7rem;
+    opacity: 0.5;
+    letter-spacing: 0.05em;
+    line-height: 1.8;
+  }
+
+  .key-badge {
+    display: inline-block;
+    border: 1px solid rgba(0,255,231,0.4);
+    padding: 1px 6px;
+    font-size: 0.65rem;
+    margin: 0 2px;
+  }
+
+  /* Custom cursor */
+  .custom-cursor {
+    position: fixed;
+    width: 20px; height: 20px;
+    border: 1.5px solid var(--cyan);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 200;
+    transform: translate(-50%, -50%);
+    transition: width 0.1s, height 0.1s;
+    box-shadow: var(--glow-cyan);
+  }
+
+  .credits {
+    font-size: 0.55rem;
+    opacity: 0.2;
+    letter-spacing: 0.15em;
+    margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="custom-cursor" id="cursor"></div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1>VOID RUNNER</h1>
+    <div class="score-board">
+      <div class="score-item">
+        <span class="score-label">Score</span>
+        <span class="score-val" id="score-display">000000</span>
+      </div>
+      <div class="score-item">
+        <span class="score-label">Best</span>
+        <span class="score-val" id="best-display">000000</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:relative; line-height:0;">
+    <canvas id="gameCanvas" width="600" height="480"></canvas>
+
+    <div class="overlay" id="start-overlay">
+      <h2 class="start-title">VOID RUNNER</h2>
+      <p>Dodge the asteroids. Collect stars. Survive.</p>
+      <div class="start-instructions">
+        <div class="instr-item">
+          <span class="key-badge">←</span><span class="key-badge">→</span> or <span class="key-badge">A</span><span class="key-badge">D</span><br>Move ship
+        </div>
+        <div class="instr-item">
+          <span class="key-badge">MOUSE</span><br>Also works
+        </div>
+        <div class="instr-item">
+          <span class="key-badge">★</span><br>Stars = points
+        </div>
+      </div>
+      <button class="play-btn" id="start-btn">LAUNCH</button>
+    </div>
+
+    <div class="overlay" id="over-overlay" style="display:none">
+      <h2 class="over-title">DESTROYED</h2>
+      <div class="final-score" id="final-score-display">000000</div>
+      <p id="new-best-msg" style="color:#ffe600; display:none;">✦ NEW BEST SCORE ✦</p>
+      <p>The void claims another pilot.</p>
+      <button class="play-btn" id="restart-btn">TRY AGAIN</button>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="lives" id="lives-display"></div>
+    <div class="level-display" id="level-display">SECTOR 1</div>
+    <div class="hint-text">SURVIVE THE VOID</div>
+  </div>
+
+  <div class="credits">VOID RUNNER · CREATED BY AARON SERMON</div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// Custom cursor
+const cursorEl = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cursorEl.style.left = e.clientX + 'px';
+  cursorEl.style.top  = e.clientY + 'px';
+});
+
+// State
+let state = 'start'; // start | playing | dead
+let score = 0, bestScore = parseInt(localStorage.getItem('vr-best') || '0');
+let lives = 3, level = 1, frame = 0;
+let invincible = 0;
+let particles = [], asteroids = [], stars = [], bgStars = [];
+let ship = { x: W/2, y: H - 80, w: 22, h: 28, speed: 5, targetX: W/2 };
+let keys = {};
+
+document.getElementById('best-display').textContent = String(bestScore).padStart(6,'0');
+
+// Generate background stars once
+for (let i = 0; i < 120; i++) {
+  bgStars.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.5+0.3, speed: Math.random()*0.4+0.1, alpha: Math.random()*0.6+0.2 });
+}
+
+// Input
+document.addEventListener('keydown', e => keys[e.key] = true);
+document.addEventListener('keyup',   e => keys[e.key] = false);
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  ship.targetX = e.clientX - rect.left;
+});
+
+// Buttons
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', startGame);
+
+function startGame() {
+  score = 0; lives = 3; level = 1; frame = 0; invincible = 0;
+  asteroids = []; stars = []; particles = [];
+  ship.x = W/2; ship.targetX = W/2;
+  document.getElementById('start-overlay').style.display = 'none';
+  document.getElementById('over-overlay').style.display  = 'none';
+  updateHUD();
+  state = 'playing';
+}
+
+function updateHUD() {
+  document.getElementById('score-display').textContent = String(score).padStart(6,'0');
+  document.getElementById('best-display').textContent  = String(bestScore).padStart(6,'0');
+  document.getElementById('level-display').textContent = `SECTOR ${level}`;
+
+  const livesEl = document.getElementById('lives-display');
+  livesEl.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const d = document.createElement('span');
+    d.className = 'life-icon' + (i >= lives ? ' lost' : '');
+    livesEl.appendChild(d);
+  }
+}
+
+// Spawning
+function spawnAsteroid() {
+  const size = 12 + Math.random() * 22;
+  const speed = 1.5 + Math.random() * (1.5 + level * 0.3);
+  const drift = (Math.random() - 0.5) * 1.5;
+  asteroids.push({
+    x: size + Math.random() * (W - size*2),
+    y: -size,
+    r: size,
+    speed,
+    drift,
+    rot: 0,
+    rotSpeed: (Math.random()-0.5)*0.06,
+    points: Math.floor(6 + Math.random()*5),
+    color: Math.random() > 0.7 ? '#ff4466' : '#888'
+  });
+}
+
+function spawnStar() {
+  stars.push({
+    x: 20 + Math.random() * (W-40),
+    y: -12,
+    r: 6,
+    speed: 2 + Math.random(),
+    pulse: Math.random() * Math.PI * 2
+  });
+}
+
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 4;
+    particles.push({ x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, life: 1, color, size: 1+Math.random()*3 });
+  }
+}
+
+// Collision circle-rect
+function circleRect(cx, cy, cr, rx, ry, rw, rh) {
+  const nearX = Math.max(rx, Math.min(cx, rx+rw));
+  const nearY = Math.max(ry, Math.min(cy, ry+rh));
+  return (cx-nearX)**2 + (cy-nearY)**2 < cr**2;
+}
+
+// Drawing helpers
+function drawShip(x, y, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+
+  // Engine glow
+  ctx.shadowColor = '#00ffe7';
+  ctx.shadowBlur = 20;
+
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(0, -28);
+  ctx.lineTo(14, 10);
+  ctx.lineTo(7, 6);
+  ctx.lineTo(0, 12);
+  ctx.lineTo(-7, 6);
+  ctx.lineTo(-14, 10);
+  ctx.closePath();
+  ctx.fillStyle = '#00ffe7';
+  ctx.fill();
+
+  // Cockpit
+  ctx.beginPath();
+  ctx.moveTo(0, -18);
+  ctx.lineTo(6, 2);
+  ctx.lineTo(-6, 2);
+  ctx.closePath();
+  ctx.fillStyle = '#060810';
+  ctx.fill();
+
+  // Engine flame
+  const flameH = 6 + Math.sin(frame*0.3)*4;
+  ctx.beginPath();
+  ctx.moveTo(-5, 12);
+  ctx.lineTo(0, 12 + flameH);
+  ctx.lineTo(5, 12);
+  ctx.closePath();
+  ctx.fillStyle = '#ffe600';
+  ctx.shadowColor = '#ffe600';
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawAsteroid(a) {
+  ctx.save();
+  ctx.translate(a.x, a.y);
+  ctx.rotate(a.rot);
+
+  ctx.shadowColor = a.color === '#ff4466' ? '#ff2d78' : 'rgba(150,150,150,0.3)';
+  ctx.shadowBlur = a.color === '#ff4466' ? 15 : 5;
+
+  ctx.beginPath();
+  for (let i = 0; i < a.points; i++) {
+    const angle = (i / a.points) * Math.PI * 2;
+    const jitter = 0.7 + ((i*7+3) % 5) * 0.1;
+    const r = a.r * jitter;
+    if (i === 0) ctx.moveTo(Math.cos(angle)*r, Math.sin(angle)*r);
+    else ctx.lineTo(Math.cos(angle)*r, Math.sin(angle)*r);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = a.color === '#ff4466' ? '#ff2d78' : '#666';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = a.color === '#ff4466' ? 'rgba(255,45,120,0.1)' : 'rgba(80,80,90,0.15)';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawStar(s) {
+  s.pulse += 0.08;
+  const glow = 0.6 + Math.sin(s.pulse)*0.4;
+  ctx.save();
+  ctx.translate(s.x, s.y);
+  ctx.shadowColor = '#ffe600';
+  ctx.shadowBlur = 12 * glow;
+  ctx.fillStyle = '#ffe600';
+  ctx.globalAlpha = glow;
+  // 5-pointed star
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const angle = (i / 10) * Math.PI * 2 - Math.PI/2;
+    const r = i%2===0 ? s.r : s.r*0.45;
+    if (i===0) ctx.moveTo(Math.cos(angle)*r, Math.sin(angle)*r);
+    else ctx.lineTo(Math.cos(angle)*r, Math.sin(angle)*r);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function update() {
+  frame++;
+
+  // Move ship
+  if (keys['ArrowLeft'] || keys['a'] || keys['A']) ship.targetX -= ship.speed * 3;
+  if (keys['ArrowRight'] || keys['d'] || keys['D']) ship.targetX += ship.speed * 3;
+  ship.targetX = Math.max(20, Math.min(W-20, ship.targetX));
+  ship.x += (ship.targetX - ship.x) * 0.15;
+
+  // Level up
+  level = 1 + Math.floor(score / 500);
+
+  // Spawn
+  const asteroidRate = Math.max(18, 50 - level * 3);
+  if (frame % asteroidRate === 0) spawnAsteroid();
+  if (frame % 90 === 0) spawnStar();
+  if (invincible > 0) invincible--;
+
+  const sx = ship.x - 11, sy = ship.y - 20;
+
+  // Update asteroids
+  asteroids = asteroids.filter(a => {
+    a.y += a.speed;
+    a.x += a.drift;
+    a.rot += a.rotSpeed;
+
+    if (invincible === 0 && circleRect(a.x, a.y, a.r*0.75, sx, sy, 22, 28)) {
+      spawnParticles(ship.x, ship.y, '#ff2d78', 20);
+      spawnParticles(a.x, a.y, a.color === '#ff4466' ? '#ff2d78' : '#888', 12);
+      lives--;
+      invincible = 120;
+      updateHUD();
+      if (lives <= 0) gameOver();
+      return false;
+    }
+    return a.y < H + a.r;
+  });
+
+  // Update stars
+  stars = stars.filter(s => {
+    s.y += s.speed;
+    if (circleRect(s.x, s.y, s.r, sx, sy, 22, 28)) {
+      spawnParticles(s.x, s.y, '#ffe600', 10);
+      score += 50;
+      updateHUD();
+      return false;
+    }
+    // Missed star — small penalty hint
+    return s.y < H + s.r;
+  });
+
+  // Score for surviving
+  if (frame % 30 === 0) { score += level; updateHUD(); }
+
+  // Particles
+  particles = particles.filter(p => {
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= 0.025;
+    return p.life > 0;
+  });
+
+  // Background stars scroll
+  bgStars.forEach(s => { s.y += s.speed; if (s.y > H) s.y = 0; });
+}
+
+function gameOver() {
+  state = 'dead';
+  const isNew = score > bestScore;
+  if (isNew) { bestScore = score; localStorage.setItem('vr-best', bestScore); }
+  document.getElementById('final-score-display').textContent = String(score).padStart(6,'0');
+  document.getElementById('new-best-msg').style.display = isNew ? 'block' : 'none';
+  document.getElementById('over-overlay').style.display  = 'flex';
+  updateHUD();
+}
+
+function draw() {
+  // Clear
+  ctx.fillStyle = '#060810';
+  ctx.fillRect(0, 0, W, H);
+
+  // Background stars
+  bgStars.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(200,220,255,${s.alpha})`;
+    ctx.fill();
+  });
+
+  if (state === 'playing') {
+    // Draw game objects
+    asteroids.forEach(drawAsteroid);
+    stars.forEach(drawStar);
+
+    // Particles
+    particles.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = p.life;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // Ship (flash when invincible)
+    const shipAlpha = invincible > 0 ? (Math.sin(frame*0.5)*0.5+0.5) : 1;
+    drawShip(ship.x, ship.y, shipAlpha);
+
+    // Scan line accent at bottom
+    ctx.fillStyle = 'rgba(0,255,231,0.03)';
+    ctx.fillRect(0, ship.y + 20, W, 2);
+  }
+
+  if (state === 'dead') {
+    // Draw lingering particles
+    particles.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = p.life * 0.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+}
+
+function loop() {
+  if (state === 'playing') update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
